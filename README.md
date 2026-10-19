@@ -2,7 +2,7 @@
 
 Showcase site for **Prisma PTGI**, a path traced and ray traced shaderpack for Minecraft Java (Iris).
 
-- Live site: https://moonwalktv.github.io/prisma-ptgi/
+- Live site: https://prismaptgi.com
 - Get the shaderpack: https://www.patreon.com/cw/MoonWalkTv/membership
 
 This repository only contains the website (HTML and screenshots), not the shaderpack.
