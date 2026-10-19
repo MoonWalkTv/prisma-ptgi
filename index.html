@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prisma PTGI</title>
+<meta name="description" content="Prisma PTGI: a path traced and ray traced shaderpack for Minecraft Java (Iris). Real bounced light, ray traced shadows, colored block light and biome water.">
+<meta property="og:title" content="Prisma PTGI">
+<meta property="og:description" content="Path tracing and ray tracing for Minecraft Java (Iris).">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0a0c14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0c14'/%3E%3Cpath d='M32 10 54 52H10Z' fill='none' stroke='%23ecedf4' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M38 34 62 26' stroke='%23ff5d6c' stroke-width='3'/%3E%3Cpath d='M38 34 62 32' stroke='%23ffe36e' stroke-width='3'/%3E%3Cpath d='M38 34 62 38' stroke='%235cc8ff' stroke-width='3'/%3E%3Cpath d='M38 34 62 44' stroke='%23a07bff' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one cinematic column; every section is a "shot" with a full-width image moment,
+   text sits in a narrow measure beside or under it. Single dark look (a night sky lit by a prism). */
+:root {
+  --night: #0a0c14;
+  --night-2: #111522;
+  --panel: #161b2b;
+  --line: #262d44;
+  --text: #ecedf4;
+  --muted: #9ba3bc;
+  --sun: #ffcf7a;
+  --sky: #86b8ff;
+  --spectrum: linear-gradient(90deg, #ff5d6c, #ffa94d, #ffe36e, #6dffb3, #5cc8ff, #a07bff);
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--night);
+  color: var(--text);
+  font: 400 17px/1.6 var(--body);
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+a { color: var(--sky); }
+:focus-visible { outline: 2px solid var(--sun); outline-offset: 3px; }
+.wrap {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-left: var(--gutter-l);
+  padding-right: var(--gutter-r);
+}
+.eyebrow {
+  font: 600 12px/1 var(--mono);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(32px, 5vw, 58px); line-height: 1.02; font-weight: 800; letter-spacing: -.02em; }
+h3 { font-size: 22px; font-weight: 700; }
+p { margin: 0; max-width: 62ch; color: #cfd3e2; }
+.spectral {
+  background: var(--spectrum);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 9s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---------------- top bar ---------------- */
+.bar {
+  position: fixed; inset: 0 0 auto 0; z-index: 20;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: linear-gradient(to bottom, rgba(10,12,20,.85), rgba(10,12,20,0));
+  pointer-events: none;
+}
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 18px/1 var(--display); letter-spacing: .02em; pointer-events: auto; color: var(--text); text-decoration: none; }
+.logo canvas { width: 26px; height: 26px; }
+.bar nav { display: flex; gap: 18px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+.bar nav a { color: var(--muted); text-decoration: none; font: 500 14px/1 var(--body); }
+.bar nav a:hover { color: var(--text); }
+@media (max-width: 640px) { .bar nav { display: none; } }
+
+/* ---------------- hero ---------------- */
+.hero { position: relative; min-height: min(92vh, 900px); display: grid; align-items: end; overflow: hidden; isolation: isolate; }
+.hero-stage { position: absolute; inset: 0; z-index: -2; }
+.hero-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); animation: drift 26s ease-in-out infinite alternate; }
+.hero-stage .p { clip-path: inset(0 0 0 0); }
+.hero-stage.reveal .p { animation: drift 26s ease-in-out infinite alternate, wipe 3.2s cubic-bezier(.7,0,.2,1) .4s both; }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes drift { from { transform: scale(1.06) translate3d(0,0,0); } to { transform: scale(1.12) translate3d(-1.5%, -1%, 0); } }
+.beam {
+  position: absolute; top: -10%; bottom: -10%; width: 3px; left: 0; z-index: -1;
+  background: var(--spectrum);
+  box-shadow: 0 0 24px 6px rgba(255,220,150,.55), 0 0 90px 30px rgba(140,180,255,.25);
+  opacity: 0; transform: skewX(-8deg);
+}
+.hero-stage.reveal ~ .beam { animation: beam 3.2s cubic-bezier(.7,0,.2,1) .4s both; }
+@keyframes beam { 0% { left: 0; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+.hero::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to top, var(--night) 4%, rgba(10,12,20,.55) 40%, rgba(10,12,20,0) 70%);
+}
+#motes { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+.hero .wrap { padding-block: 120px 56px; display: grid; gap: 22px; }
+.hero h1 {
+  font-size: clamp(56px, 13vw, 168px); line-height: .86; font-weight: 800; letter-spacing: -.045em;
+}
+.hero h1 span { display: block; }
+.hero .lede { font-size: clamp(17px, 2vw, 21px); color: #e4e7f1; max-width: 46ch; }
+.hero-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag { font: 600 12px/1 var(--mono); letter-spacing: .08em; padding: 8px 11px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; background: rgba(10,12,20,.45); backdrop-filter: blur(6px); }
+.hero-hint { display: flex; align-items: center; gap: 10px; color: var(--muted); font: 500 13px/1 var(--mono); }
+.hero-hint b { color: var(--text); font-weight: 600; }
+
+/* ---------------- compare slider ---------------- */
+section { padding-block: clamp(64px, 10vw, 120px); scroll-margin-top: 40px; }
+.sec-head { display: grid; gap: 14px; margin-bottom: 30px; }
+.compare {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%;
+  border-radius: 14px; overflow: hidden; background: var(--night-2);
+  box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), 0 0 0 1px var(--line);
+  touch-action: pan-y; user-select: none; cursor: ew-resize;
+}
+.compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .5s ease; }
+.compare .top { clip-path: inset(0 0 0 var(--pos, 50%)); }
+.compare .handle {
+  position: absolute; top: 0; bottom: 0; left: var(--pos, 50%); width: 2px; transform: translateX(-1px);
+  background: var(--spectrum); box-shadow: 0 0 18px rgba(255,230,170,.7); pointer-events: none;
+}
+.compare .knob {
+  position: absolute; top: 50%; left: 50%; width: 48px; height: 48px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: rgba(10,12,20,.7); border: 1px solid rgba(255,255,255,.35); backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+}
+.compare .knob svg { width: 22px; height: 22px; fill: none; stroke: var(--text); stroke-width: 2; }
+.compare .lab {
+  position: absolute; bottom: 14px; font: 600 11px/1 var(--mono); letter-spacing: .16em; padding: 8px 10px; border-radius: 6px;
+  background: rgba(10,12,20,.6); backdrop-filter: blur(6px); pointer-events: none;
+}
+.compare .lab.l { left: 14px; color: var(--muted); }
+.compare .lab.r { right: 14px; color: var(--text); }
+.compare input[type=range] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0; }
+.compare.fading img { opacity: .2; }
+
+.scene-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+.scene-meta h3 { font-size: clamp(20px, 2.4vw, 28px); }
+.scene-meta .eyebrow { color: var(--sun); }
+.scene-meta p { font-size: 15px; color: var(--muted); }
+.chips { display: flex; gap: 10px; overflow-x: auto; padding: 18px 2px 8px; scrollbar-width: thin; }
+.chip {
+  flex: 0 0 auto; width: 132px; display: grid; gap: 7px; padding: 0; border: 0; background: none; color: var(--muted);
+  font: 500 13px/1.2 var(--body); text-align: left; cursor: pointer;
+}
+.chip img { width: 132px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; outline: 1px solid var(--line); transition: transform .25s ease, outline-color .25s; }
+.chip:hover img { transform: translateY(-3px); }
+.chip[aria-pressed=true] { color: var(--text); }
+.chip[aria-pressed=true] img { outline: 2px solid var(--sun); }
+
+/* ---------------- feature shots ---------------- */
+.split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 56px); align-items: center; }
+.split.flip { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); }
+.split.flip .copy { order: -1; }
+@media (max-width: 860px) { .split, .split.flip { grid-template-columns: minmax(0, 1fr); } .split.flip .copy { order: 0; } }
+.copy { display: grid; gap: 18px; min-width: 0; }
+.facts { display: grid; gap: 12px; margin: 6px 0 0; padding: 0; list-style: none; }
+.facts li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; color: #cfd3e2; font-size: 15.5px; }
+.facts li i { width: 10px; height: 10px; margin-top: 7px; border-radius: 2px; background: var(--c, var(--sun)); box-shadow: 0 0 12px var(--c, var(--sun)); transform: rotate(45deg); }
+.shot { position: relative; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), 0 0 0 1px var(--line); }
+.shot img { width: 100%; aspect-ratio: 16/9; object-fit: cover; transition: transform 1.2s ease; }
+.shot:hover img { transform: scale(1.03); }
+.shot figcaption { position: absolute; left: 14px; bottom: 14px; font: 600 11px/1.3 var(--mono); letter-spacing: .12em; padding: 8px 10px; border-radius: 6px; background: rgba(10,12,20,.6); backdrop-filter: blur(6px); max-width: calc(100% - 28px); }
+.sweep::before {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,240,210,.22) 50%, transparent 60%);
+  transform: translateX(-100%);
+}
+.sweep.lit::before { animation: sweep 1.6s ease .2s; }
+@keyframes sweep { to { transform: translateX(100%); } }
+
+/* colored light section */
+.rgb { position: relative; overflow: hidden; }
+.rgb::before {
+  content: ""; position: absolute; inset: -20% -10%; z-index: -1; opacity: .5;
+  background:
+    radial-gradient(40% 50% at 18% 40%, rgba(70,110,255,.35), transparent 70%),
+    radial-gradient(35% 45% at 50% 55%, rgba(255,60,60,.30), transparent 70%),
+    radial-gradient(40% 50% at 82% 45%, rgba(60,255,120,.28), transparent 70%);
+  animation: breathe 7s ease-in-out infinite alternate;
+}
+.rgb { isolation: isolate; }
+@keyframes breathe { from { opacity: .35; transform: scale(1); } to { opacity: .6; transform: scale(1.06); } }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.sw { display: flex; align-items: center; gap: 9px; padding: 8px 12px 8px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font: 500 13.5px/1 var(--body); }
+.sw b { width: 14px; height: 14px; border-radius: 3px; background: var(--c); box-shadow: 0 0 14px 2px var(--c); animation: pulse 2.6s ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes pulse { 50% { box-shadow: 0 0 22px 6px var(--c); } }
+
+/* gallery */
+.gallery { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.gallery .shot:nth-child(1) { grid-column: span 7; }
+.gallery .shot:nth-child(2) { grid-column: span 5; }
+.gallery .shot:nth-child(3) { grid-column: span 4; }
+.gallery .shot:nth-child(4) { grid-column: span 4; }
+.gallery .shot:nth-child(5) { grid-column: span 4; }
+.gallery .shot img { height: 100%; aspect-ratio: auto; min-height: 220px; }
+@media (max-width: 760px) { .gallery .shot { grid-column: span 12 !important; } }
+
+/* tech sheet */
+.sheet { width: 100%; border-collapse: collapse; font-size: 15px; }
+.sheet-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--night-2); }
+.sheet th, .sheet td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sheet tr:last-child th, .sheet tr:last-child td { border-bottom: 0; }
+.sheet th { font: 600 12px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); width: 32%; }
+.sheet td { color: #dde0ea; font-variant-numeric: tabular-nums; }
+.sheet td code { font-family: var(--mono); font-size: 13.5px; color: var(--sun); }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; padding: 14px 20px; border-radius: 12px;
+  font: 700 16px/1 var(--display); letter-spacing: .01em; text-decoration: none; color: #0a0c14;
+  background: var(--spectrum); background-size: 200% 100%; animation: shimmer 9s linear infinite;
+  box-shadow: 0 10px 40px -10px rgba(255,200,120,.55); transition: transform .2s ease, box-shadow .2s ease;
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 16px 50px -10px rgba(255,200,120,.75); }
+.btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+.btn.ghost { background: rgba(10,12,20,.5); color: var(--text); border: 1px solid rgba(255,255,255,.25); box-shadow: none; animation: none; backdrop-filter: blur(6px); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+/* plans */
+.plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+@media (max-width: 900px) { .plans { grid-template-columns: minmax(0, 1fr); } }
+.plan {
+  position: relative; display: grid; grid-template-rows: auto 1fr auto; gap: 20px; padding: 28px 24px 24px; border-radius: 18px;
+  background: linear-gradient(170deg, var(--panel), var(--night-2)); border: 1px solid var(--line);
+}
+.plan::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: 18px 18px 0 0; background: var(--accent); }
+.plan.featured { border-color: var(--accent); box-shadow: 0 30px 80px -40px var(--accent); }
+.plan.featured .pill { position: absolute; top: -12px; right: 20px; background: var(--night); color: var(--accent); border-color: var(--accent); }
+.plan-top { display: grid; gap: 10px; }
+.plan .lvl { display: flex; gap: 8px; }
+.plan .lvl i { width: 12px; height: 12px; border-radius: 3px; transform: rotate(45deg); background: rgba(255,255,255,.15); }
+.plan .lvl i.on { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.plan h3 { font-size: 34px; letter-spacing: -.02em; color: var(--accent); }
+.plan h3.spectral { color: transparent; }
+.plan-price { display: flex; align-items: baseline; gap: 8px; }
+.plan-price b { font: 800 44px/1 var(--display); letter-spacing: -.03em; }
+.plan-price span { font: 600 13px/1 var(--mono); color: var(--muted); letter-spacing: .08em; }
+.plan-ver { font-size: 14.5px; color: var(--muted); }
+.plan-ver b { color: var(--text); }
+.plan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; align-content: start; }
+.plan-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; color: #cfd3e2; font-size: 15px; }
+.plan-list li::before { content: ""; width: 8px; height: 8px; margin-top: 7px; border-radius: 2px; transform: rotate(45deg); background: var(--accent); }
+.plan .btn { justify-content: center; }
+
+/* download */
+.dl { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(20px, 3vw, 40px); align-items: stretch; }
+@media (max-width: 860px) { .dl { grid-template-columns: minmax(0, 1fr); } }
+.dl-card {
+  position: relative; display: grid; gap: 20px; align-content: start; padding: clamp(22px, 3vw, 34px); border-radius: 18px;
+  background: linear-gradient(160deg, var(--panel), var(--night-2)); border: 1px solid var(--line); overflow: hidden;
+}
+.dl-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--spectrum); }
+.dl-ver { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.dl-ver b { font: 800 clamp(44px, 6vw, 64px)/1 var(--display); letter-spacing: -.03em; }
+.pill { font: 600 11px/1 var(--mono); letter-spacing: .14em; padding: 7px 10px; border-radius: 999px; background: rgba(109,255,179,.12); color: #6dffb3; border: 1px solid rgba(109,255,179,.35); }
+.pill.old { background: rgba(155,163,188,.1); color: var(--muted); border-color: var(--line); }
+.dl-meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 18px; margin: 0; font-size: 14.5px; }
+.dl-meta dt { font: 600 12px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.dl-meta dd { margin: 0; color: #dde0ea; min-width: 0; overflow-wrap: anywhere; }
+.dl-meta code { font: 400 12.5px/1.5 var(--mono); color: var(--sun); }
+.dl-note { font-size: 13.5px; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 14px; align-items: start; counter-increment: s; color: #cfd3e2; font-size: 15.5px; }
+.steps li::before {
+  content: counter(s); display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
+  font: 700 16px/1 var(--display); color: var(--text); background: var(--night); border: 1px solid var(--line);
+}
+.steps b { color: var(--text); }
+.steps code { font: 400 13px/1.5 var(--mono); color: var(--sun); overflow-wrap: anywhere; }
+
+/* versions */
+.ver-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 18px; }
+.ver-tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; cursor: pointer;
+  font: 600 14px/1 var(--mono); color: var(--muted); background: var(--night-2); border: 1px solid var(--line);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.ver-tab:hover { color: var(--text); }
+.ver-tab[aria-selected=true] { color: var(--text); border-color: var(--sun); background: var(--panel); }
+.ver-tab .dot { width: 7px; height: 7px; border-radius: 50%; background: #6dffb3; box-shadow: 0 0 10px #6dffb3; }
+.ver-panel { border: 1px solid var(--line); border-radius: 16px; background: var(--night-2); padding: clamp(20px, 3vw, 32px); display: grid; gap: 18px; }
+.ver-panel[hidden] { display: none; }
+.ver-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ver-head h3 { font-size: clamp(22px, 3vw, 30px); }
+.ver-panel ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.ver-panel li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; align-items: baseline; color: #cfd3e2; font-size: 15.5px; }
+.ver-panel li span { font: 600 10.5px/1 var(--mono); letter-spacing: .12em; padding: 6px 7px; border-radius: 5px; text-align: center; }
+.k-new { color: #6dffb3; background: rgba(109,255,179,.1); }
+.k-imp { color: var(--sky); background: rgba(134,184,255,.12); }
+.k-fix { color: var(--sun); background: rgba(255,207,122,.12); }
+.k-rem { color: #ff8a8a; background: rgba(255,120,120,.1); }
+@media (max-width: 520px) { .ver-panel li { grid-template-columns: minmax(0, 1fr); gap: 6px; } .ver-panel li span { justify-self: start; } }
+
+footer { padding-block: 56px calc(48px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); }
+footer .wrap { display: grid; gap: 14px; }
+footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
+.copyright { font: 600 13px/1.4 var(--mono); color: var(--text); letter-spacing: .04em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .hero-stage img { transform: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="logo" href="#top"><canvas id="logoPrism" width="52" height="52" aria-hidden="true"></canvas>Prisma PTGI</a>
+    <nav aria-label="Sections">
+      <a href="#compare">Compare</a>
+      <a href="#raytracing">Ray tracing</a>
+      <a href="#lights">Colored light</a>
+      <a href="#worlds">Worlds</a>
+      <a href="#versions">Versions</a>
+      <a href="#download">Plans</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-label="Prisma PTGI">
+    <div class="hero-stage" id="heroStage">
+      <img class="v" src="img/warmocean-v.jpg" alt="Warm ocean in Minecraft without shaders">
+      <img class="p" src="img/warmocean-p.jpg" alt="The same ocean with Prisma PTGI: turquoise water, sun reflections and volumetric clouds">
+    </div>
+    <div class="beam" aria-hidden="true"></div>
+    <canvas id="motes" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <span class="eyebrow">Shaderpack for Iris · Fabric + Sodium</span>
+      <h1><span class="spectral">Prisma</span><span>PTGI</span></h1>
+      <p class="lede">Light that really bounces. Voxel path tracing and ray tracing for Minecraft Java: exact shadows, colored light that spreads block by block, water that changes with the biome.</p>
+      <div class="hero-tags">
+        <span class="tag">PATH TRACING</span><span class="tag">RAY TRACED SHADOWS</span><span class="tag">COLORED LIGHTS</span><span class="tag">BIOME WATER</span><span class="tag">VOLUMETRIC CLOUDS</span>
+      </div>
+      <div class="hero-actions">
+        <a class="btn" href="#download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Get it · from €2.99/month</a>
+        <a class="btn ghost" href="#compare">Compare with vanilla</a>
+      </div>
+      <div class="hero-hint">The light beam turns <b>vanilla</b> into <b>Prisma</b> · same spot, same moment</div>
+    </div>
+  </section>
+
+  <section id="compare">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Vanilla vs Prisma</span>
+        <h2>Drag the line. <span class="spectral">See what changes.</span></h2>
+        <p>Every pair was captured from the same spot at the same time of day, switching the shaders off and on again. Vanilla Minecraft on the left, Prisma PTGI v20 on the HIGH profile on the right.</p>
+      </div>
+      <div class="compare" id="cmp" style="--pos:50%">
+        <img class="bot" id="cmpV" src="img/noon-v.jpg" alt="">
+        <img class="top" id="cmpP" src="img/noon-p.jpg" alt="">
+        <div class="handle"><div class="knob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg></div></div>
+        <span class="lab l">VANILLA</span><span class="lab r">PRISMA PTGI</span>
+        <input type="range" id="cmpRange" min="0" max="100" value="50" step="0.1" aria-label="Comparison position between vanilla and Prisma">
+      </div>
+      <div class="scene-meta">
+        <div><span class="eyebrow" id="sceneTag">Village · 12:00</span><h3 id="sceneTitle">Midday</h3></div>
+        <p id="sceneText">Blue sky with volumetric cumulus and cirrus, soft shadows, water reflecting the village.</p>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Choose a scene"></div>
+    </div>
+  </section>
+
+  <section id="raytracing">
+    <div class="wrap split">
+      <div class="compare" id="cmpRt" style="--pos:50%">
+        <img class="bot" src="img/lab_window-v.jpg" alt="Room lit by a window, vanilla">
+        <img class="top" src="img/lab_window-p.jpg" alt="The same room with Prisma: a patch of sunlight on the floor and light bouncing off the walls">
+        <div class="handle"><div class="knob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg></div></div>
+        <span class="lab l">VANILLA</span><span class="lab r">PRISMA PTGI</span>
+        <input type="range" min="0" max="100" value="50" step="0.1" aria-label="Window room comparison">
+      </div>
+      <div class="copy">
+        <span class="eyebrow">Ray tracing + path tracing</span>
+        <h2>The sun comes in.<br><span class="spectral">The room lights up.</span></h2>
+        <p>The world around you is turned into voxels every frame. Rays travel through it to find out what the sun really reaches and where the light comes from.</p>
+        <ul class="facts">
+          <li><i></i><span><b>Ray traced shadows</b> block by block near the player, with a shadow map out to 192 blocks for everything else.</span></li>
+          <li><i style="--c: var(--sky)"></i><span><b>Path traced global illumination</b>: the patch of sunlight on the floor brightens the walls and ceiling, while interiors stay dark where light can't reach.</span></li>
+          <li><i style="--c: #6dffb3"></i><span><b>Doors and windows matter</b>: open a door and the light comes in, close it and the room goes dark.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="wrap" style="margin-top: clamp(28px, 5vw, 56px)">
+      <div class="split flip">
+        <figure class="shot sweep" style="margin:0"><img src="img/warmocean-p.jpg" alt="Sun reflecting on a warm ocean" loading="lazy"><figcaption>REFLECTIONS · VOXEL + SCREEN SPACE</figcaption></figure>
+        <div class="copy">
+          <span class="eyebrow">Reflections</span>
+          <h3>Water that mirrors the real world</h3>
+          <p>Reflections search the voxel world first, then the screen, then the sky and its clouds: islands show up in the water even when they are off screen, and the sun leaves a trail of light on the waves.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="lights" class="rgb">
+    <div class="wrap split flip">
+      <div class="compare" id="cmpRgb" style="--pos:50%">
+        <img class="bot" src="img/lab_night-v.jpg" alt="Lapis, redstone and emerald blocks in the dark, vanilla">
+        <img class="top" src="img/lab_night-p.jpg" alt="The same blocks with Prisma: blue, red and green light coloring the floor and walls">
+        <div class="handle"><div class="knob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></svg></div></div>
+        <span class="lab l">VANILLA</span><span class="lab r">PRISMA PTGI</span>
+        <input type="range" min="0" max="100" value="50" step="0.1" aria-label="Colored light comparison">
+      </div>
+      <div class="copy">
+        <span class="eyebrow">Colored volumetric lighting</span>
+        <h2>Every light <span class="spectral">has its own color.</span></h2>
+        <p>Block light spreads through a colored 3D volume, block by block like Minecraft's own light, and path tracing adds the bounces. Faces turned toward a light get more of it, faces turned away stay in shadow.</p>
+        <div class="swatches">
+          <span class="sw" style="--c:#ff3b24"><b></b>Redstone</span>
+          <span class="sw" style="--c:#2a63ff;--d:.4s"><b></b>Lapis lazuli</span>
+          <span class="sw" style="--c:#2bff5a;--d:.8s"><b></b>Emerald</span>
+          <span class="sw" style="--c:#1fd2ff;--d:1.2s"><b></b>Soul torch</span>
+          <span class="sw" style="--c:#ff8a2a;--d:1.6s"><b></b>Torch</span>
+        </div>
+        <p style="font-size:15px;color:var(--muted)">Redstone, lapis and emerald blocks glow by default. Diamond, gold, amethyst and ores can be switched on in the "Glowing Blocks" menu. A light held in your hand shines with the color of that item, in either hand.</p>
+      </div>
+    </div>
+    <div class="wrap" style="margin-top: clamp(28px, 5vw, 56px)">
+      <figure class="shot sweep" style="margin:0"><img src="img/lab_day-p.jpg" alt="Sunlight through the window and colored lights in the same room" loading="lazy"><figcaption>SUNLIGHT + COLORED LIGHT · SAME SCENE</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="worlds">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">One world, many skies</span>
+        <h2>From cherry groves <span class="spectral">to snowy peaks.</span></h2>
+        <p>A hand-tuned palette for the sky, sun and moon, volumetric clouds, and water that takes the color of its biome: turquoise in warm oceans, dark green in swamps.</p>
+      </div>
+      <div class="gallery">
+        <figure class="shot sweep" style="margin:0"><img src="img/cherry-p.jpg" alt="Cherry grove at sunset with light rays" loading="lazy"><figcaption>CHERRY GROVE · SUNSET</figcaption></figure>
+        <figure class="shot sweep" style="margin:0"><img src="img/hero_sunset-p.jpg" alt="Golden sunset over the ocean" loading="lazy"><figcaption>OCEAN · GOLDEN HOUR</figcaption></figure>
+        <figure class="shot sweep" style="margin:0"><img src="img/peaks-p.jpg" alt="Snowy mountains under a high sun" loading="lazy"><figcaption>JAGGED PEAKS</figcaption></figure>
+        <figure class="shot sweep" style="margin:0"><img src="img/badlands-p.jpg" alt="Colored terraces of the badlands" loading="lazy"><figcaption>BADLANDS</figcaption></figure>
+        <figure class="shot sweep" style="margin:0"><img src="img/coast-p.jpg" alt="Coastline with a village and turquoise water" loading="lazy"><figcaption>COASTLINE</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Get Prisma PTGI</span>
+        <h2>Pick your <span class="spectral">light.</span></h2>
+        <p>Prisma PTGI is available through a Patreon membership. The plans differ only in which version you get: Spark has the previous versions, Prism always has the newest one. Spectrum is the same as Prism for those who want to support the project more.</p>
+      </div>
+      <div class="plans">
+        <article class="plan" style="--accent:#ffb35c">
+          <div class="plan-top"><div class="lvl"><i class="on"></i><i></i><i></i></div><h3>Spark</h3>
+            <div class="plan-price"><b>€2.99</b><span>/ month</span></div>
+            <p class="plan-ver">Includes <b>v19</b> · one version behind</p></div>
+          <ul class="plan-list">
+            <li>Previous versions of Prisma PTGI</li>
+            <li>Each new release reaches Spark when the next one comes out</li>
+          </ul>
+          <a class="btn ghost" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Join Spark</a>
+        </article>
+        <article class="plan featured" style="--accent:#6dd3ff">
+          <span class="pill">LATEST VERSION</span>
+          <div class="plan-top"><div class="lvl"><i class="on"></i><i class="on"></i><i></i></div><h3>Prism</h3>
+            <div class="plan-price"><b>€5.99</b><span>/ month</span></div>
+            <p class="plan-ver">Includes <b>v20</b> · the latest version</p></div>
+          <ul class="plan-list">
+            <li>Always the newest version of Prisma PTGI</li>
+            <li>All previous versions too</li>
+          </ul>
+          <a class="btn" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Join Prism</a>
+        </article>
+        <article class="plan" style="--accent:#ffe36e">
+          <div class="plan-top"><div class="lvl"><i class="on"></i><i class="on"></i><i class="on"></i></div><h3 class="spectral">Spectrum</h3>
+            <div class="plan-price"><b>€12.99</b><span>/ month</span></div>
+            <p class="plan-ver">Includes <b>v20</b> · the latest version</p></div>
+          <ul class="plan-list">
+            <li>The same as Prism</li>
+            <li>For those who want to support the project more</li>
+          </ul>
+          <a class="btn ghost" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Join Spectrum</a>
+        </article>
+      </div>
+      <p class="dl-note" style="margin-top:16px">Plans open the official MoonWalk Patreon in a new tab. Local taxes may be added at checkout. The license is included in every zip (LICENSE.txt): you can play, record and stream with it; re-uploading, sharing the file, modified versions and reuse in other shaders are not allowed.</p>
+
+      <div class="dl" style="margin-top: clamp(28px, 4vw, 44px)">
+        <div class="dl-card">
+          <div class="dl-ver"><b>v20</b><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
+          <dl class="dl-meta">
+            <dt>File</dt><dd>PrismaPTGI_v20.zip</dd>
+            <dt>Size</dt><dd>151 KB</dd>
+            <dt>Minecraft</dt><dd>Java Edition with Fabric</dd>
+            <dt>Needs</dt><dd>Sodium + Iris (tested with Iris 1.11.4, Minecraft 26.2)</dd>
+            <dt>SHA-256</dt><dd><code>eeae839e4bd39e30a9760eb13952980da263d8721b56739ca5644f8771100274</code></dd>
+          </dl>
+          <p class="dl-note">Spark members get <b>v19</b> (SHA-256 <code>c9f14988dbde2ab509dd6dbeac3d58dfafdd1d83d6e6f0ac2c1d417b316808fa</code>). Check the code of your file to be sure it's the official one.</p>
+        </div>
+        <div class="dl-card">
+          <h3>How to install</h3>
+          <ol class="steps">
+            <li><span><b>Download the zip</b> from the release post on Patreon that matches your plan.</span></li>
+            <li><span><b>Install Fabric, Sodium and Iris</b> for your Minecraft version (the Iris installer sets up all three).</span></li>
+            <li><span><b>Open the shaderpacks folder</b>: in Minecraft go to Options → Video Settings → Shader Packs → Open Shader Pack Folder.</span></li>
+            <li><span><b>Copy the zip</b> into that folder. Do not unzip it.</span></li>
+            <li><span><b>Select Prisma PTGI</b> in the list and press Apply. Change quality with the Profile button (LOW to EXTREME).</span></li>
+          </ol>
+          <p class="dl-note">Tip: press <code>K</code> in game to switch shaders off and on, the same way the comparisons on this page were made.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="versions">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Versions</span>
+        <h2>What changed, <span class="spectral">version by version.</span></h2>
+        <p>The latest version is for Prism and Spectrum members, the previous one for Spark. Older versions are listed so you can see how the pack evolved.</p>
+      </div>
+      <div class="ver-tabs" role="tablist" aria-label="Versions" id="verTabs">
+        <button class="ver-tab" role="tab" aria-selected="true" aria-controls="v20" id="t-v20"><i class="dot"></i>v20</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v19" id="t-v19">v19</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v18" id="t-v18">v18</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v17" id="t-v17">v17</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v16" id="t-v16">v16</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="vdev" id="t-vdev">v1–v15</button>
+      </div>
+
+      <div class="ver-panel" role="tabpanel" id="v20" aria-labelledby="t-v20">
+        <div class="ver-head"><h3>v20 · Clear water</h3><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
+        <ul>
+          <li><span class="k-imp">IMPROVED</span>Water has a color of its own even in the shallows, so it no longer looks like glass.</li>
+          <li><span class="k-imp">IMPROVED</span>Underwater redone: a clearer deep blue fog that lets you see about 20 blocks, softer light shafts.</li>
+          <li><span class="k-rem">REMOVED</span>Shoreline foam, the underwater view wobble and the extra underwater blur.</li>
+          <li><span class="k-new">NEW</span>License file and copyright notice in every file of the pack.</li>
+        </ul>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="v19" aria-labelledby="t-v19" hidden>
+        <div class="ver-head"><h3>v19 · Biome water &amp; doors</h3><span class="pill old">SPARK</span></div>
+        <ul>
+          <li><span class="k-new">NEW</span>Biome water: swamps murky green, warm oceans clear turquoise, cold oceans dark blue, also under water. New options for biome water and color intensity.</li>
+          <li><span class="k-new">NEW</span>Light changes when you open or close doors, trapdoors and fence gates; fences no longer block light.</li>
+          <li><span class="k-imp">IMPROVED</span>New waves with sharper crests and ripples that calm down in the distance.</li>
+          <li><span class="k-imp">IMPROVED</span>Directional block light: faces turned toward a light get more of it, with a softer falloff. Stronger light bounces indoors.</li>
+          <li><span class="k-fix">FIXED</span>A colored light held in the off hand turned white.</li>
+        </ul>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="v18" aria-labelledby="t-v18" hidden>
+        <div class="ver-head"><h3>v18 · Light that spreads</h3><span class="pill old">ARCHIVED</span></div>
+        <ul>
+          <li><span class="k-new">NEW</span>Block light spreads block by block through a colored light volume, with path traced bounces on top.</li>
+          <li><span class="k-imp">IMPROVED</span>Redstone, lapis, emerald, diamond, gold and amethyst blocks glow in much richer colors.</li>
+          <li><span class="k-fix">FIXED</span>A dark square around torches and other light sources.</li>
+          <li><span class="k-fix">FIXED</span>Water seemed to change depth depending on the viewing angle.</li>
+        </ul>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="v17" aria-labelledby="t-v17" hidden>
+        <div class="ver-head"><h3>v17 · Glowing blocks</h3><span class="pill old">ARCHIVED</span></div>
+        <ul>
+          <li><span class="k-new">NEW</span>Glowing blocks menu: redstone, lapis and emerald blocks on by default; diamond, gold, amethyst and ores optional.</li>
+          <li><span class="k-new">NEW</span>The light you hold takes the color of the item (soul torch blue, redstone torch red).</li>
+          <li><span class="k-imp">IMPROVED</span>Darker interiors lit only by the light that comes in through windows and doors.</li>
+          <li><span class="k-fix">FIXED</span>Stairs, slabs, walls, beds and signs cast their real shape instead of full-block shadows.</li>
+          <li><span class="k-fix">FIXED</span>Dark lines along the edges of paths, farmland and slabs; black fire particles.</li>
+        </ul>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="v16" aria-labelledby="t-v16" hidden>
+        <div class="ver-head"><h3>v16 · The Prisma palette</h3><span class="pill old">ARCHIVED</span></div>
+        <ul>
+          <li><span class="k-new">NEW</span>Hand-tuned Prisma color palette for sky, sunlight and moonlight; filmic tonemap.</li>
+          <li><span class="k-new">NEW</span>Night sky with stars and the vanilla moon texture, phases included.</li>
+          <li><span class="k-imp">IMPROVED</span>Golden sunsets, smaller and crisper cumulus clouds with grey bases, thin cirrus streaks.</li>
+          <li><span class="k-imp">IMPROVED</span>Darker caves, nights and storms; warmer torches and cyan soul torches; sunlight through door and trapdoor windows.</li>
+        </ul>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="vdev" aria-labelledby="t-vdev" hidden>
+        <div class="ver-head"><h3>v1–v15 · Early development</h3><span class="pill old">PRIVATE BUILDS</span></div>
+        <p>Private test builds that were never released. They laid the groundwork: the voxel path tracer, ray traced sun and handheld light shadows, the colored light volume, volumetric clouds, water reflections and rain puddles.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="specs">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Technical specs</span>
+        <h2>Under the hood</h2>
+      </div>
+      <div class="sheet-wrap">
+        <table class="sheet">
+          <tr><th>Requirements</th><td>Minecraft Java with Fabric, Sodium and Iris (compute shaders). Tested with Iris <code>1.11.4</code> on Minecraft <code>26.2</code>.</td></tr>
+          <tr><th>Path tracing</th><td>Half resolution, 1 ray per pixel by default (up to 4), infinite bounces by reusing the previous frame, temporal + à-trous denoiser.</td></tr>
+          <tr><th>Voxel world</th><td><code>128 × 96 × 128</code> blocks around the player, rebuilt every frame from the shadow pass.</td></tr>
+          <tr><th>Shadows</th><td>Ray traced near you (64 steps), <code>2048</code> shadow map out to <code>192</code> blocks. Stairs, slabs and doors cast their real shape.</td></tr>
+          <tr><th>Colored light</th><td>3D RGBA volume with two propagation steps per frame, directional light, 18 light source types plus modded light blocks.</td></tr>
+          <tr><th>Sky</th><td>Physical atmosphere (Rayleigh, Mie, ozone) with the Prisma palette, volumetric cumulus, cirrus, stars and the vanilla moon with its phases.</td></tr>
+          <tr><th>Water</th><td>Crested waves, refraction, per-biome absorption, caustics, voxel + screen space reflections, puddles and ripples in the rain.</td></tr>
+          <tr><th>Profiles</th><td>LOW · MEDIUM · HIGH · ULTRA · EXTREME, plus a lighter mode without path tracing.</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="copyright">© 2026 MoonWalk · Prisma PTGI · All rights reserved</span>
+    <p>You may use it to play, record videos, stream and post screenshots, crediting Prisma PTGI by MoonWalk. Copying, redistributing, modifying or using any part of the pack (code, algorithms, values) to create other shaders is not allowed without written permission. The full license is in the LICENSE.txt file inside the shaderpack.</p>
+    <p>In-game captures: Prisma PTGI v20, HIGH profile, 2560 × 1440. Minecraft is a trademark of Mojang Studios; Prisma PTGI is not affiliated with Mojang or Microsoft.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- scenes for the main comparison
+  const scenes = [
+    { id: "noon", title: "Midday", tag: "Village · 12:00", text: "Blue sky with volumetric cumulus and cirrus, soft shadows, water reflecting the village." },
+    { id: "sunset", title: "Sunset", tag: "Village · 18:36", text: "A golden sun, light rays between the houses and warm reflections on the water instead of an orange square." },
+    { id: "night", title: "Night", tag: "Village · 00:00", text: "Real darkness, stars, and torches warming the house fronts." },
+    { id: "rain", title: "Rain", tag: "Village · storm", text: "Overcast sky, light distance fog and water mirroring the grey clouds." },
+    { id: "cherry", title: "Cherry grove", tag: "Cherry grove · sunset", text: "Backlit trees with volumetric light rays filtering through." },
+    { id: "jungle", title: "Jungle river", tag: "Jungle · midday", text: "Clear water by the bank, waves reflecting the sky and clouds." },
+    { id: "coast", title: "Coastline", tag: "Mangrove swamp · morning", text: "Islands, beaches and turquoise water seen from above." },
+    { id: "badlands", title: "Badlands", tag: "Badlands · afternoon", text: "Terracotta terraces with crisp shadows and distant haze." },
+    { id: "peaks", title: "Snowy peaks", tag: "Jagged peaks · morning", text: "Snow that no longer blows out to white, a haloed sun and green meadows below." },
+    { id: "desert", title: "Desert", tag: "Desert · afternoon", text: "Warm sand, tree shadows and a sky full of clouds." },
+    { id: "warmocean", title: "Warm ocean", tag: "Warm ocean · midday", text: "Water color follows the biome: clear turquoise and a trail of sunlight on the waves." },
+    { id: "warmshore", title: "Turquoise shore", tag: "Warm ocean · midday", text: "Shallow water showing the bottom, deep blue where it drops off." }
+  ];
+
+  function bindCompare(el, autoDemo) {
+    const range = el.querySelector("input[type=range]");
+    const set = v => { el.style.setProperty("--pos", v + "%"); range.value = v; };
+    range.addEventListener("input", () => set(+range.value));
+    let dragging = false;
+    const fromEvent = e => {
+      const r = el.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+      set(Math.max(0, Math.min(100, x / r.width * 100)));
+    };
+    el.addEventListener("pointerdown", e => { dragging = true; fromEvent(e); });
+    window.addEventListener("pointermove", e => { if (dragging) fromEvent(e); });
+    window.addEventListener("pointerup", () => { dragging = false; });
+    if (autoDemo && !reduce && "IntersectionObserver" in window) {
+      let done = false;
+      new IntersectionObserver((entries, obs) => {
+        if (done || !entries[0].isIntersecting) return;
+        done = true; obs.disconnect();
+        const t0 = performance.now();
+        const step = t => {
+          if (dragging) return;
+          const k = Math.min(1, (t - t0) / 2600);
+          set(50 + Math.sin(k * Math.PI * 2) * 32 * (1 - k));
+          if (k < 1) requestAnimationFrame(step); else set(50);
+        };
+        requestAnimationFrame(step);
+      }, { threshold: 0.55 }).observe(el);
+    }
+  }
+  document.querySelectorAll(".compare").forEach(c => bindCompare(c, true));
+
+  // scene chips
+  const chips = document.getElementById("chips");
+  const cmp = document.getElementById("cmp");
+  const imgV = document.getElementById("cmpV"), imgP = document.getElementById("cmpP");
+  const pre = {};
+  scenes.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    b.innerHTML = '<img src="img/' + s.id + '-p.jpg" alt="" loading="lazy"><span>' + s.title + '</span>';
+    b.addEventListener("click", () => show(i));
+    chips.appendChild(b);
+  });
+  function load(src) { return pre[src] || (pre[src] = new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = src; })); }
+  async function show(i) {
+    const s = scenes[i];
+    chips.querySelectorAll(".chip").forEach((c, k) => c.setAttribute("aria-pressed", k === i ? "true" : "false"));
+    cmp.classList.add("fading");
+    await Promise.all([load("img/" + s.id + "-v.jpg"), load("img/" + s.id + "-p.jpg")]);
+    imgV.src = "img/" + s.id + "-v.jpg"; imgP.src = "img/" + s.id + "-p.jpg";
+    imgV.alt = s.title + " in vanilla Minecraft"; imgP.alt = s.title + " with Prisma PTGI";
+    document.getElementById("sceneTitle").textContent = s.title;
+    document.getElementById("sceneTag").textContent = s.tag;
+    document.getElementById("sceneText").textContent = s.text;
+    requestAnimationFrame(() => cmp.classList.remove("fading"));
+  }
+  imgV.alt = "Midday in vanilla Minecraft"; imgP.alt = "Midday with Prisma PTGI";
+  // keyboard: left / right arrows change scene when the chips have focus
+  chips.addEventListener("keydown", e => {
+    const cur = [...chips.children].findIndex(c => c.getAttribute("aria-pressed") === "true");
+    if (e.key === "ArrowRight") { const n = (cur + 1) % scenes.length; show(n); chips.children[n].focus(); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { const n = (cur - 1 + scenes.length) % scenes.length; show(n); chips.children[n].focus(); e.preventDefault(); }
+  });
+
+  // version tabs
+  const tabs = [...document.querySelectorAll("#verTabs .ver-tab")];
+  function selectTab(t) {
+    tabs.forEach(x => { const on = x === t; x.setAttribute("aria-selected", on ? "true" : "false"); x.tabIndex = on ? 0 : -1;
+      document.getElementById(x.getAttribute("aria-controls")).hidden = !on; });
+  }
+  tabs.forEach((t, i) => {
+    t.tabIndex = i === 0 ? 0 : -1;
+    t.addEventListener("click", () => selectTab(t));
+    t.addEventListener("keydown", e => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (d) { const n = tabs[(i + d + tabs.length) % tabs.length]; selectTab(n); n.focus(); e.preventDefault(); }
+    });
+  });
+
+  // hero: light beam wipe from vanilla to Prisma once the images are ready
+  const stage = document.getElementById("heroStage");
+  if (!reduce) {
+    const imgs = [...stage.querySelectorAll("img")];
+    Promise.all(imgs.map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))).then(() => stage.classList.add("reveal"));
+  }
+
+  // light sweeps over feature shots as they scroll into view (content is visible before)
+  if ("IntersectionObserver" in window && !reduce) {
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("lit"); io.unobserve(e.target); } }), { threshold: 0.4 });
+    document.querySelectorAll(".sweep").forEach(el => io.observe(el));
+  }
+
+  // floating light motes in the hero (spectral dust caught in sunbeams)
+  const cv = document.getElementById("motes"), ctx = cv.getContext("2d");
+  const hues = [355, 30, 50, 150, 200, 260];
+  let W = 0, H = 0, motes = [];
+  function size() {
+    const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+    motes = Array.from({ length: Math.round(Math.min(70, W / 18)) }, () => ({
+      x: Math.random() * W, y: Math.random() * H, r: .6 + Math.random() * 1.8,
+      vx: .05 + Math.random() * .25, vy: -.05 - Math.random() * .2, h: hues[(Math.random() * hues.length) | 0], p: Math.random() * 6.28 }));
+  }
+  function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    for (const m of motes) {
+      m.x += m.vx; m.y += m.vy; m.p += .02;
+      if (m.x > W + 10) m.x = -10; if (m.y < -10) m.y = H + 10;
+      const a = .25 + .35 * Math.sin(m.p);
+      ctx.beginPath(); ctx.fillStyle = "hsla(" + m.h + ",100%,80%," + a + ")";
+      ctx.shadowColor = "hsla(" + m.h + ",100%,70%,.9)"; ctx.shadowBlur = 8;
+      ctx.arc(m.x, m.y, m.r, 0, 6.283); ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  size(); window.addEventListener("resize", size);
+  if (!reduce) requestAnimationFrame(frame);
+
+  // logo: a tiny prism splitting a white ray into the spectrum
+  const lg = document.getElementById("logoPrism").getContext("2d");
+  lg.lineWidth = 2.4; lg.strokeStyle = "#ecedf4";
+  lg.beginPath(); lg.moveTo(26, 6); lg.lineTo(46, 44); lg.lineTo(6, 44); lg.closePath(); lg.stroke();
+  lg.beginPath(); lg.moveTo(0, 30); lg.lineTo(20, 27); lg.stroke();
+  ["#ff5d6c", "#ffa94d", "#ffe36e", "#6dffb3", "#5cc8ff", "#a07bff"].forEach((c, i) => {
+    lg.strokeStyle = c; lg.lineWidth = 2; lg.beginPath(); lg.moveTo(33, 27); lg.lineTo(52, 20 + i * 4); lg.stroke();
+  });
+})();
+</script>
+</body>
+</html>
