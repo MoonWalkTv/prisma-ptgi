@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prisma PTGI</title>
-<meta name="description" content="Prisma PTGI: a path traced and ray traced shaderpack for Minecraft Java (Iris). Real bounced light, ray traced shadows, colored block light and biome water.">
-<meta property="og:title" content="Prisma PTGI">
-<meta property="og:description" content="Path tracing and ray tracing for Minecraft Java (Iris).">
+<meta name="description" content="Prisma PTGI by MoonWalk: a path traced and ray traced shaderpack for Minecraft Java (Iris). Real bounced light, ray traced shadows, colored block light, LabPBR materials and light through stained glass.">
+<meta name="author" content="MoonWalk">
+<meta property="og:title" content="Prisma PTGI · by MoonWalk">
+<meta property="og:description" content="Path tracing and ray tracing for Minecraft Java (Iris). New in v21: full LabPBR support and colored light through stained glass.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://prismaptgi.com/">
+<meta property="og:image" content="https://prismaptgi.com/img/warmocean-p.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0a0c14">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0c14'/%3E%3Cpath d='M32 10 54 52H10Z' fill='none' stroke='%23ecedf4' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M38 34 62 26' stroke='%23ff5d6c' stroke-width='3'/%3E%3Cpath d='M38 34 62 32' stroke='%23ffe36e' stroke-width='3'/%3E%3Cpath d='M38 34 62 38' stroke='%235cc8ff' stroke-width='3'/%3E%3Cpath d='M38 34 62 44' stroke='%23a07bff' stroke-width='3'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -74,19 +78,29 @@ p { margin: 0; max-width: 62ch; color: #cfd3e2; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
 /* ---------------- top bar ---------------- */
+/* The bar always sits on a dark, blurred band: the hero sky behind it is bright (clouds, sun),
+   so a fade-to-transparent gradient left the links unreadable. */
 .bar {
   position: fixed; inset: 0 0 auto 0; z-index: 20;
   padding-top: env(safe-area-inset-top, 0px);
-  background: linear-gradient(to bottom, rgba(10,12,20,.85), rgba(10,12,20,0));
-  pointer-events: none;
+  background: rgba(8,10,18,.62);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  transition: background .3s ease, border-color .3s ease;
 }
-.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
-.logo { display: flex; align-items: center; gap: 10px; font: 800 18px/1 var(--display); letter-spacing: .02em; pointer-events: auto; color: var(--text); text-decoration: none; }
-.logo canvas { width: 26px; height: 26px; }
-.bar nav { display: flex; gap: 18px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
-.bar nav a { color: var(--muted); text-decoration: none; font: 500 14px/1 var(--body); }
-.bar nav a:hover { color: var(--text); }
-@media (max-width: 640px) { .bar nav { display: none; } }
+.bar.solid { background: rgba(8,10,18,.9); border-bottom-color: var(--line); }
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; }
+.logo { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; min-width: 0; }
+.logo canvas { width: 28px; height: 28px; flex: 0 0 auto; }
+.logo-text { display: grid; gap: 3px; }
+.logo-text b { font: 800 18px/1 var(--display); letter-spacing: .02em; }
+.logo-text small { font: 600 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: #b9c0d6; }
+.logo-text small em { font-style: normal; color: var(--sun); }
+.bar nav { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.bar nav a { color: #dfe3ef; text-decoration: none; font: 500 14px/1 var(--body); }
+.bar nav a:hover { color: #fff; }
+.bar nav a.nav-cta { padding: 9px 14px; border-radius: 10px; color: #0a0c14; font-weight: 700; background: var(--spectrum); background-size: 200% 100%; animation: shimmer 9s linear infinite; }
+@media (max-width: 900px) { .bar nav a:not(.nav-cta) { display: none; } }
 
 /* ---------------- hero ---------------- */
 .hero { position: relative; min-height: min(92vh, 900px); display: grid; align-items: end; overflow: hidden; isolation: isolate; }
@@ -104,20 +118,41 @@ p { margin: 0; max-width: 62ch; color: #cfd3e2; }
 }
 .hero-stage.reveal ~ .beam { animation: beam 3.2s cubic-bezier(.7,0,.2,1) .4s both; }
 @keyframes beam { 0% { left: 0; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+/* Scrim: dark at the bottom (into the page), along the left edge (behind the text column)
+   and at the very top (behind the bar), so every line of hero text sits on a dark base. */
 .hero::after {
   content: ""; position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(to top, var(--night) 4%, rgba(10,12,20,.55) 40%, rgba(10,12,20,0) 70%);
+  background:
+    linear-gradient(to top, var(--night) 3%, rgba(10,12,20,.62) 36%, rgba(10,12,20,.18) 66%, rgba(10,12,20,.6) 100%),
+    linear-gradient(90deg, rgba(8,10,18,.78) 0%, rgba(8,10,18,.5) 38%, rgba(8,10,18,.08) 68%, rgba(8,10,18,0) 100%);
 }
 #motes { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
-.hero .wrap { padding-block: 120px 56px; display: grid; gap: 22px; }
+.hero .wrap { padding-block: 132px 56px; display: grid; gap: 22px; }
+.hero-kicker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.hero .eyebrow {
+  color: #eef0f7; padding: 9px 13px; border-radius: 999px;
+  background: rgba(8,10,18,.66); border: 1px solid rgba(255,255,255,.16);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.hero .eyebrow b { color: var(--sun); font-weight: 600; }
+.new-badge {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px 8px 9px; border-radius: 999px; text-decoration: none;
+  font: 600 12px/1 var(--mono); letter-spacing: .1em; color: #eef0f7;
+  background: rgba(8,10,18,.66); border: 1px solid rgba(109,255,179,.45);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.new-badge span { padding: 4px 6px; border-radius: 5px; background: #6dffb3; color: #06120c; }
+.new-badge:hover { border-color: #6dffb3; }
 .hero h1 {
   font-size: clamp(56px, 13vw, 168px); line-height: .86; font-weight: 800; letter-spacing: -.045em;
+  filter: drop-shadow(0 6px 30px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.35));
 }
 .hero h1 span { display: block; }
-.hero .lede { font-size: clamp(17px, 2vw, 21px); color: #e4e7f1; max-width: 46ch; }
+.hero .lede { font-size: clamp(17px, 2vw, 21px); color: #eef0f7; max-width: 46ch; text-shadow: 0 2px 14px rgba(0,0,0,.6); }
+.hero .lede b { color: #fff; }
 .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag { font: 600 12px/1 var(--mono); letter-spacing: .08em; padding: 8px 11px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; background: rgba(10,12,20,.45); backdrop-filter: blur(6px); }
-.hero-hint { display: flex; align-items: center; gap: 10px; color: var(--muted); font: 500 13px/1 var(--mono); }
+.tag { font: 600 12px/1 var(--mono); letter-spacing: .08em; padding: 8px 11px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; background: rgba(8,10,18,.62); color: #eef0f7; backdrop-filter: blur(6px); }
+.hero-hint { display: flex; align-items: center; gap: 10px; color: #c3c9dc; font: 500 13px/1.4 var(--mono); text-shadow: 0 1px 8px rgba(0,0,0,.7); }
 .hero-hint b { color: var(--text); font-weight: 600; }
 
 /* ---------------- compare slider ---------------- */
@@ -307,6 +342,43 @@ section { padding-block: clamp(64px, 10vw, 120px); scroll-margin-top: 40px; }
 .k-fix { color: var(--sun); background: rgba(255,207,122,.12); }
 .k-rem { color: #ff8a8a; background: rgba(255,120,120,.1); }
 @media (max-width: 520px) { .ver-panel li { grid-template-columns: minmax(0, 1fr); gap: 6px; } .ver-panel li span { justify-self: start; } }
+.ver-sub { display: grid; gap: 12px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.ver-sub h4 { margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font: 700 17px/1.3 var(--display); }
+.ver-sub h4 code { font: 600 12.5px/1 var(--mono); color: var(--sun); padding: 5px 7px; border-radius: 5px; background: rgba(255,207,122,.1); }
+
+/* what's new in v21 */
+.news { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .news { grid-template-columns: minmax(0, 1fr); } }
+.news-card {
+  position: relative; display: grid; grid-template-rows: auto 1fr; border-radius: 18px; overflow: hidden;
+  background: linear-gradient(170deg, var(--panel), var(--night-2)); border: 1px solid var(--line);
+}
+.news-art { position: relative; aspect-ratio: 16 / 8; overflow: hidden; background: #070910; border-bottom: 1px solid var(--line); }
+.news-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.news-art .ver { position: absolute; left: 14px; top: 14px; font: 600 11px/1 var(--mono); letter-spacing: .14em; padding: 7px 9px; border-radius: 6px; background: rgba(8,10,18,.72); color: #eef0f7; border: 1px solid rgba(255,255,255,.14); }
+.news-body { display: grid; gap: 14px; align-content: start; padding: clamp(20px, 3vw, 28px); }
+.news-body h3 { font-size: clamp(22px, 2.6vw, 28px); letter-spacing: -.01em; }
+.news-body .facts li { font-size: 15px; }
+.glass-patch { animation: glow 5.5s ease-in-out infinite alternate; }
+@keyframes glow { from { opacity: .55; } to { opacity: .95; } }
+.shine { animation: shine 6s ease-in-out infinite; }
+@keyframes shine { 0%, 100% { transform: translateX(-60px); opacity: 0; } 30% { opacity: .9; } 60% { transform: translateX(60px); opacity: 0; } }
+
+/* creator */
+.maker { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(22px, 4vw, 48px); align-items: center;
+  padding: clamp(24px, 4vw, 44px); border-radius: 22px; border: 1px solid var(--line);
+  background: radial-gradient(70% 120% at 0% 0%, rgba(92,200,255,.12), transparent 60%), radial-gradient(60% 120% at 100% 100%, rgba(160,123,255,.14), transparent 60%), var(--night-2); }
+@media (max-width: 700px) { .maker { grid-template-columns: minmax(0, 1fr); } }
+.moon { position: relative; width: clamp(120px, 18vw, 170px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; }
+.moon::before { content: ""; position: absolute; inset: 0; border-radius: 50%; padding: 3px; background: conic-gradient(#ff5d6c, #ffa94d, #ffe36e, #6dffb3, #5cc8ff, #a07bff, #ff5d6c);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: spin 14s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+.moon svg { width: 72%; height: 72%; }
+.maker-copy { display: grid; gap: 16px; min-width: 0; }
+.maker-copy h2 { font-size: clamp(30px, 4.4vw, 50px); }
+.maker-stats { display: flex; flex-wrap: wrap; gap: 10px; }
+.maker-stats span { font: 600 12px/1 var(--mono); letter-spacing: .08em; padding: 9px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: #dfe3ef; }
+.maker-stats b { color: var(--sun); font-weight: 600; }
 
 footer { padding-block: 56px calc(48px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); }
 footer .wrap { display: grid; gap: 14px; }
@@ -324,14 +396,16 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
 
 <header class="bar">
   <div class="wrap">
-    <a class="logo" href="#top"><canvas id="logoPrism" width="52" height="52" aria-hidden="true"></canvas>Prisma PTGI</a>
+    <a class="logo" href="#top"><canvas id="logoPrism" width="56" height="56" aria-hidden="true"></canvas><span class="logo-text"><b>Prisma PTGI</b><small>by <em>MoonWalk</em></small></span></a>
     <nav aria-label="Sections">
       <a href="#compare">Compare</a>
+      <a href="#new">New in v21</a>
       <a href="#raytracing">Ray tracing</a>
       <a href="#lights">Colored light</a>
       <a href="#worlds">Worlds</a>
       <a href="#versions">Versions</a>
-      <a href="#download">Plans</a>
+      <a href="#moonwalk">MoonWalk</a>
+      <a class="nav-cta" href="#download">Plans</a>
     </nav>
   </div>
 </header>
@@ -345,11 +419,14 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
     <div class="beam" aria-hidden="true"></div>
     <canvas id="motes" aria-hidden="true"></canvas>
     <div class="wrap">
-      <span class="eyebrow">Shaderpack for Iris · Fabric + Sodium</span>
+      <div class="hero-kicker">
+        <span class="eyebrow">Shaderpack for Iris · by <b>MoonWalk</b></span>
+        <a class="new-badge" href="#new"><span>NEW</span>v21 · PBR materials &amp; stained glass light</a>
+      </div>
       <h1><span class="spectral">Prisma</span><span>PTGI</span></h1>
-      <p class="lede">Light that really bounces. Voxel path tracing and ray tracing for Minecraft Java: exact shadows, colored light that spreads block by block, water that changes with the biome.</p>
+      <p class="lede">Light that really bounces. Voxel path tracing and ray tracing for Minecraft Java: exact shadows, colored light that spreads block by block, <b>light that takes the color of stained glass</b>, and real LabPBR materials.</p>
       <div class="hero-tags">
-        <span class="tag">PATH TRACING</span><span class="tag">RAY TRACED SHADOWS</span><span class="tag">COLORED LIGHTS</span><span class="tag">BIOME WATER</span><span class="tag">VOLUMETRIC CLOUDS</span>
+        <span class="tag">PATH TRACING</span><span class="tag">RAY TRACED SHADOWS</span><span class="tag">COLORED LIGHTS</span><span class="tag">LABPBR 1.3</span><span class="tag">STAINED GLASS LIGHT</span><span class="tag">BIOME WATER</span>
       </div>
       <div class="hero-actions">
         <a class="btn" href="#download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>Get it · from €2.99/month</a>
@@ -364,7 +441,7 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
       <div class="sec-head">
         <span class="eyebrow">Vanilla vs Prisma</span>
         <h2>Drag the line. <span class="spectral">See what changes.</span></h2>
-        <p>Every pair was captured from the same spot at the same time of day, switching the shaders off and on again. Vanilla Minecraft on the left, Prisma PTGI v20 on the HIGH profile on the right.</p>
+        <p>Every pair was captured from the same spot at the same time of day, switching the shaders off and on again. Vanilla Minecraft on the left, Prisma PTGI on the HIGH profile on the right (captured with v20).</p>
       </div>
       <div class="compare" id="cmp" style="--pos:50%">
         <img class="bot" id="cmpV" src="img/noon-v.jpg" alt="">
@@ -378,6 +455,68 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
         <p id="sceneText">Blue sky with volumetric cumulus and cirrus, soft shadows, water reflecting the village.</p>
       </div>
       <div class="chips" id="chips" role="group" aria-label="Choose a scene"></div>
+    </div>
+  </section>
+
+  <section id="new">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">New in v21 · latest v21v2</span>
+        <h2>Materials that feel real. <span class="spectral">Glass that paints the light.</span></h2>
+        <p>The two biggest additions since the comparisons above were captured: full support for LabPBR resource packs, and sunlight, moonlight and torchlight that take the color of the stained glass they pass through.</p>
+      </div>
+      <div class="news">
+        <article class="news-card">
+          <div class="news-art"><svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Sunlight passing through a stained glass window and painting colored patches on the floor">
+<defs><linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151a29"/><stop offset="1" stop-color="#0f1320"/></linearGradient>
+<linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151925"/><stop offset="1" stop-color="#0b0e17"/></linearGradient>
+<linearGradient id="gBeam" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3d6" stop-opacity=".22"/><stop offset="1" stop-color="#fff3d6" stop-opacity="0"/></linearGradient>
+<filter id="fSoft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+<filter id="fGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter></defs>
+<rect width="800" height="282" fill="url(#gWall)"/><polygon points="0,282 800,282 800,400 0,400" fill="url(#gFloor)"/>
+<g stroke="#1c2233" stroke-width="2"><line x1="0" y1="282" x2="-120" y2="400"/><line x1="100" y1="282" x2="-20" y2="400"/><line x1="200" y1="282" x2="80" y2="400"/><line x1="300" y1="282" x2="180" y2="400"/><line x1="400" y1="282" x2="280" y2="400"/><line x1="500" y1="282" x2="380" y2="400"/><line x1="600" y1="282" x2="480" y2="400"/><line x1="700" y1="282" x2="580" y2="400"/><line x1="800" y1="282" x2="680" y2="400"/></g>
+<polygon points="300,46 460,46 760.0,392.0 560.0,392.0" fill="url(#gBeam)"/>
+<polygon points="304.4,72.7 348.9,72.7 538.8,300.3 486.8,300.3" fill="#ff4d5e" opacity=".07"/><polygon points="357.8,72.7 402.2,72.7 594.3,300.3 542.3,300.3" fill="#ffb13d" opacity=".07"/><polygon points="411.1,72.7 455.6,72.7 649.9,300.3 597.9,300.3" fill="#ffe14d" opacity=".07"/><polygon points="304.4,126.0 348.9,126.0 571.0,337.0 519.0,337.0" fill="#3dff8f" opacity=".07"/><polygon points="357.8,126.0 402.2,126.0 631.0,337.0 579.0,337.0" fill="#2bd4ff" opacity=".07"/><polygon points="411.1,126.0 455.6,126.0 691.0,337.0 639.0,337.0" fill="#4d6bff" opacity=".07"/><polygon points="304.4,179.3 348.9,179.3 603.2,373.7 551.2,373.7" fill="#a35cff" opacity=".07"/><polygon points="357.8,179.3 402.2,179.3 667.7,373.7 615.7,373.7" fill="#ff4dc4" opacity=".07"/><polygon points="411.1,179.3 455.6,179.3 732.1,373.7 680.1,373.7" fill="#ff7a3d" opacity=".07"/>
+<g filter="url(#fGlow)" opacity=".7"><polygon class="glass-patch" style="animation-delay:0.00s" points="470.0,282.0 523.3,282.0 557.8,318.7 500.0,318.7" fill="#ff4d5e"/><polygon class="glass-patch" style="animation-delay:0.35s" points="523.3,282.0 576.7,282.0 615.6,318.7 557.8,318.7" fill="#ffb13d"/><polygon class="glass-patch" style="animation-delay:0.70s" points="576.7,282.0 630.0,282.0 673.3,318.7 615.6,318.7" fill="#ffe14d"/><polygon class="glass-patch" style="animation-delay:1.05s" points="500.0,318.7 557.8,318.7 592.2,355.3 530.0,355.3" fill="#3dff8f"/><polygon class="glass-patch" style="animation-delay:1.40s" points="557.8,318.7 615.6,318.7 654.4,355.3 592.2,355.3" fill="#2bd4ff"/><polygon class="glass-patch" style="animation-delay:1.75s" points="615.6,318.7 673.3,318.7 716.7,355.3 654.4,355.3" fill="#4d6bff"/><polygon class="glass-patch" style="animation-delay:2.10s" points="530.0,355.3 592.2,355.3 626.7,392.0 560.0,392.0" fill="#a35cff"/><polygon class="glass-patch" style="animation-delay:2.45s" points="592.2,355.3 654.4,355.3 693.3,392.0 626.7,392.0" fill="#ff4dc4"/><polygon class="glass-patch" style="animation-delay:2.80s" points="654.4,355.3 716.7,355.3 760.0,392.0 693.3,392.0" fill="#ff7a3d"/></g><g filter="url(#fSoft)"><polygon class="glass-patch" style="animation-delay:0.00s" points="470.0,282.0 523.3,282.0 557.8,318.7 500.0,318.7" fill="#ff4d5e"/><polygon class="glass-patch" style="animation-delay:0.35s" points="523.3,282.0 576.7,282.0 615.6,318.7 557.8,318.7" fill="#ffb13d"/><polygon class="glass-patch" style="animation-delay:0.70s" points="576.7,282.0 630.0,282.0 673.3,318.7 615.6,318.7" fill="#ffe14d"/><polygon class="glass-patch" style="animation-delay:1.05s" points="500.0,318.7 557.8,318.7 592.2,355.3 530.0,355.3" fill="#3dff8f"/><polygon class="glass-patch" style="animation-delay:1.40s" points="557.8,318.7 615.6,318.7 654.4,355.3 592.2,355.3" fill="#2bd4ff"/><polygon class="glass-patch" style="animation-delay:1.75s" points="615.6,318.7 673.3,318.7 716.7,355.3 654.4,355.3" fill="#4d6bff"/><polygon class="glass-patch" style="animation-delay:2.10s" points="530.0,355.3 592.2,355.3 626.7,392.0 560.0,392.0" fill="#a35cff"/><polygon class="glass-patch" style="animation-delay:2.45s" points="592.2,355.3 654.4,355.3 693.3,392.0 626.7,392.0" fill="#ff4dc4"/><polygon class="glass-patch" style="animation-delay:2.80s" points="654.4,355.3 716.7,355.3 760.0,392.0 693.3,392.0" fill="#ff7a3d"/></g>
+<rect x="290" y="36" width="180" height="180" fill="#2a2f3f" rx="3"/>
+<rect x="300" y="46" width="160" height="160" fill="#0c0f18"/>
+<g filter="url(#fGlow)" opacity=".55"><rect x="304" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ff4d5e"/><rect x="357.3333333333333" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ffb13d"/><rect x="410.6666666666667" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ffe14d"/><rect x="304" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#3dff8f"/><rect x="357.3333333333333" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#2bd4ff"/><rect x="410.6666666666667" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#4d6bff"/><rect x="304" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#a35cff"/><rect x="357.3333333333333" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#ff4dc4"/><rect x="410.6666666666667" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#ff7a3d"/></g><rect x="304" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ff4d5e"/><rect x="357.3333333333333" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ffb13d"/><rect x="410.6666666666667" y="50" width="45.333333333333336" height="45.333333333333336" fill="#ffe14d"/><rect x="304" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#3dff8f"/><rect x="357.3333333333333" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#2bd4ff"/><rect x="410.6666666666667" y="103.33333333333334" width="45.333333333333336" height="45.333333333333336" fill="#4d6bff"/><rect x="304" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#a35cff"/><rect x="357.3333333333333" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#ff4dc4"/><rect x="410.6666666666667" y="156.66666666666669" width="45.333333333333336" height="45.333333333333336" fill="#ff7a3d"/>
+</svg><span class="ver">v21v2</span></div>
+          <div class="news-body">
+            <h3>Light through stained glass</h3>
+            <p>Turn on <b>Colored glass light</b> and every stained glass window becomes a light filter, like in a church.</p>
+            <ul class="facts">
+              <li><i style="--c:#ff4dc4"></i><span><b>Colored patches of sun and moon</b> on the floor, also inside the volumetric light shafts.</span></li>
+              <li><i style="--c:#2bd4ff"></i><span><b>Torchlight is tinted</b> on the other side of a window; path traced GI and skylight are tinted too.</span></li>
+              <li><i style="--c:#3dff8f"></i><span><b>Color bleeding</b>: light bouncing off colored blocks tints what's next to them. Clear glass, panes and water stay neutral.</span></li>
+            </ul>
+          </div>
+        </article>
+        <article class="news-card">
+          <div class="news-art"><svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Iron, gold and copper blocks with sharp metallic highlights next to a parallax mapped brick block">
+<defs><clipPath id="cFace"><rect width="80" height="80"/></clipPath>
+<linearGradient id="mIronT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9eef5"/><stop offset=".55" stop-color="#aeb7c4"/><stop offset="1" stop-color="#cfd6e0"/></linearGradient>
+<linearGradient id="mGoldT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a8"/><stop offset=".55" stop-color="#f2be3a"/><stop offset="1" stop-color="#ffd86a"/></linearGradient>
+<linearGradient id="mCopT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc39f"/><stop offset=".55" stop-color="#e2804f"/><stop offset="1" stop-color="#f29b6c"/></linearGradient>
+<radialGradient id="rgHlW"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<radialGradient id="rgHlY"><stop offset="0" stop-color="#fffbe6" stop-opacity=".95"/><stop offset=".35" stop-color="#fff2b0" stop-opacity=".35"/><stop offset="1" stop-color="#fff2b0" stop-opacity="0"/></radialGradient>
+<radialGradient id="rgHlO"><stop offset="0" stop-color="#fff1e8" stop-opacity=".95"/><stop offset=".35" stop-color="#ffd2b8" stop-opacity=".35"/><stop offset="1" stop-color="#ffd2b8" stop-opacity="0"/></radialGradient>
+<radialGradient id="rgFloor" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#1d2337"/><stop offset="1" stop-color="#070910"/></radialGradient></defs>
+<rect width="800" height="400" fill="url(#rgFloor)"/>
+<g fill="#000" opacity=".45"><ellipse cx="130" cy="282" rx="78" ry="16"/><ellipse cx="310" cy="282" rx="78" ry="16"/><ellipse cx="490" cy="282" rx="78" ry="16"/><ellipse cx="670" cy="282" rx="78" ry="16"/></g>
+<g transform="matrix(0.866 .5 -0.866 .5 130 120)"><rect width="80" height="80" fill="url(#mIronT)"/><ellipse class="shine" cx="40" cy="40" rx="26" ry="26" fill="url(#rgHlW)"/></g><g transform="matrix(0.866 .5 0 1 60.72 160)"><rect width="80" height="80" fill="#8f99a8"/></g><g transform="matrix(0.866 -.5 0 1 130 200)"><rect width="80" height="80" fill="#5d6573"/></g><text fill="#c3c9dc" font-family="JetBrains Mono, monospace" font-size="15" font-weight="600" letter-spacing="2.4" x="130" y="318" text-anchor="middle">IRON</text><g transform="matrix(0.866 .5 -0.866 .5 310 120)"><rect width="80" height="80" fill="url(#mGoldT)"/><ellipse class="shine" cx="40" cy="40" rx="26" ry="26" fill="url(#rgHlY)"/></g><g transform="matrix(0.866 .5 0 1 240.72 160)"><rect width="80" height="80" fill="#d9a52b"/></g><g transform="matrix(0.866 -.5 0 1 310 200)"><rect width="80" height="80" fill="#9c6f12"/></g><text fill="#c3c9dc" font-family="JetBrains Mono, monospace" font-size="15" font-weight="600" letter-spacing="2.4" x="310" y="318" text-anchor="middle">GOLD</text><g transform="matrix(0.866 .5 -0.866 .5 490 120)"><rect width="80" height="80" fill="url(#mCopT)"/><ellipse class="shine" cx="40" cy="40" rx="26" ry="26" fill="url(#rgHlO)"/></g><g transform="matrix(0.866 .5 0 1 420.72 160)"><rect width="80" height="80" fill="#c56a42"/></g><g transform="matrix(0.866 -.5 0 1 490 200)"><rect width="80" height="80" fill="#8a4325"/></g><text fill="#c3c9dc" font-family="JetBrains Mono, monospace" font-size="15" font-weight="600" letter-spacing="2.4" x="490" y="318" text-anchor="middle">COPPER</text><g transform="matrix(0.866 .5 -0.866 .5 670 120)"><rect width="80" height="80" fill="#3e414a"/><g clip-path="url(#cFace)"><rect width="80" height="80" fill="#3e414a"/><rect x="-38" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="14" width="36" height="4" fill="#5d616b"/><rect x="-38" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="14" width="36" height="4" fill="#5d616b"/><rect x="2" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="14" width="36" height="4" fill="#5d616b"/><rect x="42" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="14" width="36" height="4" fill="#5d616b"/><rect x="82" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="34" width="36" height="4" fill="#5d616b"/><rect x="-18" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="34" width="36" height="4" fill="#5d616b"/><rect x="22" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="34" width="36" height="4" fill="#5d616b"/><rect x="62" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="34" width="36" height="4" fill="#5d616b"/><rect x="102" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="-38" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="54" width="36" height="4" fill="#5d616b"/><rect x="-38" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="54" width="36" height="4" fill="#5d616b"/><rect x="2" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="54" width="36" height="4" fill="#5d616b"/><rect x="42" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="54" width="36" height="4" fill="#5d616b"/><rect x="82" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="74" width="36" height="4" fill="#5d616b"/><rect x="-18" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="74" width="36" height="4" fill="#5d616b"/><rect x="22" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="74" width="36" height="4" fill="#5d616b"/><rect x="62" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="74" width="36" height="4" fill="#5d616b"/><rect x="102" y="62" width="36" height="2.5" fill="#b4b8c2"/></g></g><g transform="matrix(0.866 .5 0 1 600.72 160)"><rect width="80" height="80" fill="#3e414a"/><g clip-path="url(#cFace)"><rect width="80" height="80" fill="#3e414a"/><rect x="-38" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="14" width="36" height="4" fill="#5d616b"/><rect x="-38" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="14" width="36" height="4" fill="#5d616b"/><rect x="2" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="14" width="36" height="4" fill="#5d616b"/><rect x="42" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="14" width="36" height="4" fill="#5d616b"/><rect x="82" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="34" width="36" height="4" fill="#5d616b"/><rect x="-18" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="34" width="36" height="4" fill="#5d616b"/><rect x="22" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="34" width="36" height="4" fill="#5d616b"/><rect x="62" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="34" width="36" height="4" fill="#5d616b"/><rect x="102" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="-38" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="54" width="36" height="4" fill="#5d616b"/><rect x="-38" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="54" width="36" height="4" fill="#5d616b"/><rect x="2" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="54" width="36" height="4" fill="#5d616b"/><rect x="42" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="54" width="36" height="4" fill="#5d616b"/><rect x="82" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="74" width="36" height="4" fill="#5d616b"/><rect x="-18" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="74" width="36" height="4" fill="#5d616b"/><rect x="22" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="74" width="36" height="4" fill="#5d616b"/><rect x="62" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="74" width="36" height="4" fill="#5d616b"/><rect x="102" y="62" width="36" height="2.5" fill="#b4b8c2"/></g><rect width="80" height="80" fill="#000" opacity=".28"/></g><g transform="matrix(0.866 -.5 0 1 670 200)"><rect width="80" height="80" fill="#3e414a"/><g clip-path="url(#cFace)"><rect width="80" height="80" fill="#3e414a"/><rect x="-38" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="14" width="36" height="4" fill="#5d616b"/><rect x="-38" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="14" width="36" height="4" fill="#5d616b"/><rect x="2" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="14" width="36" height="4" fill="#5d616b"/><rect x="42" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="2" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="14" width="36" height="4" fill="#5d616b"/><rect x="82" y="2" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="34" width="36" height="4" fill="#5d616b"/><rect x="-18" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="34" width="36" height="4" fill="#5d616b"/><rect x="22" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="34" width="36" height="4" fill="#5d616b"/><rect x="62" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="22" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="34" width="36" height="4" fill="#5d616b"/><rect x="102" y="22" width="36" height="2.5" fill="#b4b8c2"/><rect x="-38" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-38" y="54" width="36" height="4" fill="#5d616b"/><rect x="-38" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="2" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="2" y="54" width="36" height="4" fill="#5d616b"/><rect x="2" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="42" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="42" y="54" width="36" height="4" fill="#5d616b"/><rect x="42" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="82" y="42" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="82" y="54" width="36" height="4" fill="#5d616b"/><rect x="82" y="42" width="36" height="2.5" fill="#b4b8c2"/><rect x="-18" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="-18" y="74" width="36" height="4" fill="#5d616b"/><rect x="-18" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="22" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="22" y="74" width="36" height="4" fill="#5d616b"/><rect x="22" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="62" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="62" y="74" width="36" height="4" fill="#5d616b"/><rect x="62" y="62" width="36" height="2.5" fill="#b4b8c2"/><rect x="102" y="62" width="36" height="16" rx="1.5" fill="#8b8f99"/><rect x="102" y="74" width="36" height="4" fill="#5d616b"/><rect x="102" y="62" width="36" height="2.5" fill="#b4b8c2"/></g><rect width="80" height="80" fill="#000" opacity=".28"/></g><text fill="#c3c9dc" font-family="JetBrains Mono, monospace" font-size="15" font-weight="600" letter-spacing="2.4" x="670" y="318" text-anchor="middle">PARALLAX</text>
+</svg><span class="ver">v21</span></div>
+          <div class="news-body">
+            <h3>Full LabPBR 1.3 support</h3>
+            <p>A new <b>PBR Materials</b> menu for resource packs that ship normal and specular maps.</p>
+            <ul class="facts">
+              <li><i style="--c:#ffd86a"></i><span><b>Real metals</b>: iron, gold, copper and the rest reflect with their own color, with sharp GGX highlights from the sun, moon, block lights and the light in your hand.</span></li>
+              <li><i style="--c:#86b8ff"></i><span><b>Parallax occlusion mapping</b> from the height map, with its own shadows toward the sun.</span></li>
+              <li><i style="--c:#6dffb3"></i><span><b>Subsurface scattering</b> for leaves, <b>porosity in the rain</b> (porous blocks darken, dense ones turn glossy) and emission straight from the texture.</span></li>
+            </ul>
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
@@ -469,7 +608,7 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
         <article class="plan" style="--accent:#ffb35c">
           <div class="plan-top"><div class="lvl"><i class="on"></i><i></i><i></i></div><h3>Spark</h3>
             <div class="plan-price"><b>€2.99</b><span>/ month</span></div>
-            <p class="plan-ver">Includes <b>v19</b> · one version behind</p></div>
+            <p class="plan-ver">Includes <b>v20</b> · one version behind, with all its fixes up to <b>v20v7</b></p></div>
           <ul class="plan-list">
             <li>Previous versions of Prisma PTGI</li>
             <li>Each new release reaches Spark when the next one comes out</li>
@@ -480,9 +619,10 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
           <span class="pill">LATEST VERSION</span>
           <div class="plan-top"><div class="lvl"><i class="on"></i><i class="on"></i><i></i></div><h3>Prism</h3>
             <div class="plan-price"><b>€5.99</b><span>/ month</span></div>
-            <p class="plan-ver">Includes <b>v20</b> · the latest version</p></div>
+            <p class="plan-ver">Includes <b>v21</b> · the latest version (<b>v21v2</b>)</p></div>
           <ul class="plan-list">
             <li>Always the newest version of Prisma PTGI</li>
+            <li>PBR materials and stained glass light right now</li>
             <li>All previous versions too</li>
           </ul>
           <a class="btn" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Join Prism</a>
@@ -490,7 +630,7 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
         <article class="plan" style="--accent:#ffe36e">
           <div class="plan-top"><div class="lvl"><i class="on"></i><i class="on"></i><i class="on"></i></div><h3 class="spectral">Spectrum</h3>
             <div class="plan-price"><b>€12.99</b><span>/ month</span></div>
-            <p class="plan-ver">Includes <b>v20</b> · the latest version</p></div>
+            <p class="plan-ver">Includes <b>v21</b> · the latest version (<b>v21v2</b>)</p></div>
           <ul class="plan-list">
             <li>The same as Prism</li>
             <li>For those who want to support the project more</li>
@@ -498,19 +638,20 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
           <a class="btn ghost" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Join Spectrum</a>
         </article>
       </div>
-      <p class="dl-note" style="margin-top:16px">Plans open the official MoonWalk Patreon in a new tab. Local taxes may be added at checkout. The license is included in every zip (LICENSE.txt): you can play, record and stream with it; re-uploading, sharing the file, modified versions and reuse in other shaders are not allowed.</p>
+      <p class="dl-note" style="margin-top:16px">Plans open the official <b>MoonWalk</b> Patreon in a new tab. Local taxes may be added at checkout. The license is included in every zip (LICENSE.txt): you can play, record and stream with it; re-uploading, sharing the file, modified versions and reuse in other shaders are not allowed.</p>
 
       <div class="dl" style="margin-top: clamp(28px, 4vw, 44px)">
         <div class="dl-card">
-          <div class="dl-ver"><b>v20</b><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
+          <div class="dl-ver"><b>v21v2</b><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
           <dl class="dl-meta">
-            <dt>File</dt><dd>PrismaPTGI_v20.zip</dd>
-            <dt>Size</dt><dd>151 KB</dd>
+            <dt>File</dt><dd>PrismaPTGI_v21v2.zip</dd>
+            <dt>Size</dt><dd>165 KB</dd>
             <dt>Minecraft</dt><dd>Java Edition with Fabric</dd>
             <dt>Needs</dt><dd>Sodium + Iris (tested with Iris 1.11.4, Minecraft 26.2)</dd>
-            <dt>SHA-256</dt><dd><code>eeae839e4bd39e30a9760eb13952980da263d8721b56739ca5644f8771100274</code></dd>
+            <dt>PBR</dt><dd>Any LabPBR 1.3 resource pack (optional)</dd>
+            <dt>SHA-256</dt><dd><code>6e9ae342c045fa6362072fc4def56673d33019acf6910ac1efee6cd3c46a0bd4</code></dd>
           </dl>
-          <p class="dl-note">Spark members get <b>v19</b> (SHA-256 <code>c9f14988dbde2ab509dd6dbeac3d58dfafdd1d83d6e6f0ac2c1d417b316808fa</code>). Check the code of your file to be sure it's the official one.</p>
+          <p class="dl-note">Spark members get <b>v20v7</b> (PrismaPTGI_v20v7.zip, SHA-256 <code>ea345a6aaed050864e17bb8e71fb1a4fa9c3cedeb283101c3d8851f327749314</code>). Check the code of your file to be sure it's the official one.</p>
         </div>
         <div class="dl-card">
           <h3>How to install</h3>
@@ -521,7 +662,7 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
             <li><span><b>Copy the zip</b> into that folder. Do not unzip it.</span></li>
             <li><span><b>Select Prisma PTGI</b> in the list and press Apply. Change quality with the Profile button (LOW to EXTREME).</span></li>
           </ol>
-          <p class="dl-note">Tip: press <code>K</code> in game to switch shaders off and on, the same way the comparisons on this page were made.</p>
+          <p class="dl-note">Updating? Iris keeps settings per file name: rename your old <code>PrismaPTGI_v….zip.txt</code> in the shaderpacks folder to the new name to keep them. Tip: press <code>K</code> in game to switch shaders off and on, the same way the comparisons on this page were made.</p>
         </div>
       </div>
     </div>
@@ -532,10 +673,11 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
       <div class="sec-head">
         <span class="eyebrow">Versions</span>
         <h2>What changed, <span class="spectral">version by version.</span></h2>
-        <p>The latest version is for Prism and Spectrum members, the previous one for Spark. Older versions are listed so you can see how the pack evolved.</p>
+        <p>The latest version is for Prism and Spectrum members, the previous one for Spark. Fix releases keep the same number with a suffix (v20v2, v20v3…), so a new number always means new features.</p>
       </div>
       <div class="ver-tabs" role="tablist" aria-label="Versions" id="verTabs">
-        <button class="ver-tab" role="tab" aria-selected="true" aria-controls="v20" id="t-v20"><i class="dot"></i>v20</button>
+        <button class="ver-tab" role="tab" aria-selected="true" aria-controls="v21" id="t-v21"><i class="dot"></i>v21</button>
+        <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v20" id="t-v20">v20</button>
         <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v19" id="t-v19">v19</button>
         <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v18" id="t-v18">v18</button>
         <button class="ver-tab" role="tab" aria-selected="false" aria-controls="v17" id="t-v17">v17</button>
@@ -543,17 +685,53 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
         <button class="ver-tab" role="tab" aria-selected="false" aria-controls="vdev" id="t-vdev">v1–v15</button>
       </div>
 
-      <div class="ver-panel" role="tabpanel" id="v20" aria-labelledby="t-v20">
-        <div class="ver-head"><h3>v20 · Clear water</h3><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
+      <div class="ver-panel" role="tabpanel" id="v21" aria-labelledby="t-v21">
+        <div class="ver-head"><h3>v21 · PBR materials</h3><span class="pill">LATEST · PRISM &amp; SPECTRUM</span></div>
+        <div class="ver-sub">
+          <h4><code>v21v2</code>Light through stained glass</h4>
+          <ul>
+            <li><span class="k-new">NEW</span>Stained glass colors the light that passes through it (new option Colored glass light): colored patches of sun and moon on the floor like in a church, also inside volumetric light shafts.</li>
+            <li><span class="k-new">NEW</span>Torchlight is tinted on the other side of a window; path traced GI and skylight are tinted by the glass too. Clear glass, clear panes and water don't tint.</li>
+            <li><span class="k-new">NEW</span>Color bleeding option: light bouncing off colored blocks tints the surfaces next to them.</li>
+            <li><span class="k-fix">FIXED</span>Fog through glass and water: whatever is behind, above or below the surface gets the fog of its real distance, also when looking out from under water.</li>
+          </ul>
+        </div>
+        <div class="ver-sub">
+          <h4><code>v21</code>Full LabPBR 1.3 support</h4>
+          <ul>
+            <li><span class="k-new">NEW</span>PBR Materials menu. Parallax occlusion mapping from the height map with its own shadows toward the sun; it fades out beyond ~32 blocks and never samples neighbouring textures in the atlas.</li>
+            <li><span class="k-new">NEW</span>GGX specular highlights from the sun, the moon, block lights and the light in your hand.</li>
+            <li><span class="k-new">NEW</span>Real metals (iron, gold, copper…) that reflect with their own color and get no diffuse light.</li>
+            <li><span class="k-new">NEW</span>Subsurface scattering for leaves and translucent materials; emission straight from the texture; texture occlusion applied to ambient light only.</li>
+            <li><span class="k-imp">IMPROVED</span>Porosity in the rain: porous materials darken, dense ones turn glossy, rough surfaces stay dry (only truly smooth materials reflect).</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ver-panel" role="tabpanel" id="v20" aria-labelledby="t-v20" hidden>
+        <div class="ver-head"><h3>v20 · Clear water</h3><span class="pill old">SPARK · v20v7</span></div>
+        <div class="ver-sub">
+          <h4><code>v20v2 – v20v7</code>Fix releases</h4>
+          <ul>
+            <li><span class="k-fix">v20v7</span>Light no longer shimmers while you stand still, and the dotted frame around torches is gone.</li>
+            <li><span class="k-fix">v20v6</span>No more dark square with a bright frame around torches on walls.</li>
+            <li><span class="k-fix">v20v5</span>The block a torch (or another light) is placed on gets its full light again.</li>
+            <li><span class="k-fix">v20v4</span>Global illumination no longer slowly builds up and collapses on textures with detailed normal maps.</li>
+            <li><span class="k-fix">v20v3</span>Ray traced reflections and shadows no longer pulse every ~2 seconds, and the GI stays precise after hours of play.</li>
+            <li><span class="k-fix">v20v2</span>Block light spreads smoothly through the whole light volume (it used to move in steps). LabPBR, volumetric clouds and volumetric light can be switched on from the menu again.</li>
+          </ul>
+        </div>
+        <div class="ver-sub">
+          <h4><code>v20</code>Clear water</h4>
         <ul>
           <li><span class="k-imp">IMPROVED</span>Water has a color of its own even in the shallows, so it no longer looks like glass.</li>
           <li><span class="k-imp">IMPROVED</span>Underwater redone: a clearer deep blue fog that lets you see about 20 blocks, softer light shafts.</li>
           <li><span class="k-rem">REMOVED</span>Shoreline foam, the underwater view wobble and the extra underwater blur.</li>
           <li><span class="k-new">NEW</span>License file and copyright notice in every file of the pack.</li>
         </ul>
+        </div>
       </div>
       <div class="ver-panel" role="tabpanel" id="v19" aria-labelledby="t-v19" hidden>
-        <div class="ver-head"><h3>v19 · Biome water &amp; doors</h3><span class="pill old">SPARK</span></div>
+        <div class="ver-head"><h3>v19 · Biome water &amp; doors</h3><span class="pill old">ARCHIVED</span></div>
         <ul>
           <li><span class="k-new">NEW</span>Biome water: swamps murky green, warm oceans clear turquoise, cold oceans dark blue, also under water. New options for biome water and color intensity.</li>
           <li><span class="k-new">NEW</span>Light changes when you open or close doors, trapdoors and fence gates; fences no longer block light.</li>
@@ -611,9 +789,29 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
           <tr><th>Shadows</th><td>Ray traced near you (64 steps), <code>2048</code> shadow map out to <code>192</code> blocks. Stairs, slabs and doors cast their real shape.</td></tr>
           <tr><th>Colored light</th><td>3D RGBA volume with two propagation steps per frame, directional light, 18 light source types plus modded light blocks.</td></tr>
           <tr><th>Sky</th><td>Physical atmosphere (Rayleigh, Mie, ozone) with the Prisma palette, volumetric cumulus, cirrus, stars and the vanilla moon with its phases.</td></tr>
+          <tr><th>Materials</th><td>LabPBR <code>1.3</code>: normal and specular maps, parallax occlusion mapping with self-shadowing, GGX highlights, metals, subsurface scattering, porosity, emission.</td></tr>
+          <tr><th>Stained glass</th><td>Sun, moon, block light, GI and skylight filtered by the color of the glass they cross, also in volumetric light; optional color bleeding from colored blocks.</td></tr>
           <tr><th>Water</th><td>Crested waves, refraction, per-biome absorption, caustics, voxel + screen space reflections, puddles and ripples in the rain.</td></tr>
           <tr><th>Profiles</th><td>LOW · MEDIUM · HIGH · ULTRA · EXTREME, plus a lighter mode without path tracing.</td></tr>
         </table>
+      </div>
+    </div>
+  </section>
+  <section id="moonwalk">
+    <div class="wrap">
+      <div class="maker">
+        <div class="moon" aria-hidden="true">
+          <svg viewBox="0 0 100 100"><defs><linearGradient id="mwG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6dc"/><stop offset="1" stop-color="#ffcf7a"/></linearGradient></defs>
+            <path d="M62 14a38 38 0 1 0 24 58A32 32 0 0 1 62 14Z" fill="url(#mwG)"/>
+            <g fill="#ecedf4"><circle cx="78" cy="26" r="2.2"/><circle cx="88" cy="44" r="1.4"/><circle cx="70" cy="40" r="1.1"/></g></svg>
+        </div>
+        <div class="maker-copy">
+          <span class="eyebrow">The creator</span>
+          <h2>Made by <span class="spectral">MoonWalk.</span></h2>
+          <p>Prisma PTGI is designed, written and tuned by MoonWalk. The engine is its own: the voxel path tracer, the ray traced shadows, the colored light volume, the sky and the water were built from scratch and tuned by eye, scene after scene, one version after another.</p>
+          <div class="maker-stats"><span><b>v1 → v21v2</b> · built version by version</span><span>Made for <b>Iris</b></span></div>
+          <div class="hero-actions"><a class="btn" href="https://www.patreon.com/cw/MoonWalkTv/membership" target="_blank" rel="noopener">Support MoonWalk on Patreon</a></div>
+        </div>
       </div>
     </div>
   </section>
@@ -621,9 +819,9 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
 
 <footer>
   <div class="wrap">
-    <span class="copyright">© 2026 MoonWalk · Prisma PTGI · All rights reserved</span>
+    <span class="copyright">Prisma PTGI · made by MoonWalk · © 2026 MoonWalk, all rights reserved</span>
     <p>You may use it to play, record videos, stream and post screenshots, crediting Prisma PTGI by MoonWalk. Copying, redistributing, modifying or using any part of the pack (code, algorithms, values) to create other shaders is not allowed without written permission. The full license is in the LICENSE.txt file inside the shaderpack.</p>
-    <p>In-game captures: Prisma PTGI v20, HIGH profile, 2560 × 1440. Minecraft is a trademark of Mojang Studios; Prisma PTGI is not affiliated with Mojang or Microsoft.</p>
+    <p>In-game captures: Prisma PTGI v20, HIGH profile, 2560 × 1440. The v21 illustrations are drawings, not screenshots. Minecraft is a trademark of Mojang Studios; Prisma PTGI is not affiliated with Mojang or Microsoft.</p>
   </div>
 </footer>
 
@@ -710,6 +908,11 @@ footer p { font-size: 14px; color: var(--muted); max-width: 80ch; }
     if (e.key === "ArrowRight") { const n = (cur + 1) % scenes.length; show(n); chips.children[n].focus(); e.preventDefault(); }
     if (e.key === "ArrowLeft") { const n = (cur - 1 + scenes.length) % scenes.length; show(n); chips.children[n].focus(); e.preventDefault(); }
   });
+
+  // top bar gets more opaque once the page scrolls past the hero top
+  const bar = document.querySelector(".bar");
+  const onScroll = () => bar.classList.toggle("solid", window.scrollY > 60);
+  window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
 
   // version tabs
   const tabs = [...document.querySelectorAll("#verTabs .ver-tab")];
